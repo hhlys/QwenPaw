@@ -49,6 +49,7 @@ config.json
 
 # IDEs and editors
 .idea/
+myvenv/
 .vscode/
 *.suo
 *.ntvs*
@@ -111,3 +112,4 @@ src/.hypothesis/
 
 # Worktrees
 .worktrees/
+*.tar

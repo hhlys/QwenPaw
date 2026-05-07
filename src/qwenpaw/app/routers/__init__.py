@@ -16,6 +16,7 @@ from .tools import router as tools_router
 from ..crons.api import router as cron_router
 from ..runner.api import router as runner_router
 from .console import router as console_router
+from .cloud import router as cloud_router
 from .token_usage import router as token_usage_router
 from .agent_stats import router as agent_stats_router
 from .auth import router as auth_router
@@ -30,6 +31,7 @@ router = APIRouter()
 
 router.include_router(agents_router)
 router.include_router(config_router)
+router.include_router(cloud_router)
 router.include_router(console_router)
 router.include_router(cron_router)
 router.include_router(local_models_router)

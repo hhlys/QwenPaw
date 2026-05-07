@@ -127,6 +127,7 @@ class LazyGroup(click.Group):
             ".uninstall_cmd",
         ),
         "desktop": ("qwenpaw.cli.desktop_cmd", "desktop_cmd", ".desktop_cmd"),
+        "edge": ("qwenpaw.cli.edge_cmd", "edge_group", ".edge_cmd"),
         "update": ("qwenpaw.cli.update_cmd", "update_cmd", ".update_cmd"),
         "shutdown": (
             "qwenpaw.cli.shutdown_cmd",
