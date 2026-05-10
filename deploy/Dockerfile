@@ -3,6 +3,8 @@
 # -----------------------------------------------------------------------------
 FROM agentscope-registry.ap-southeast-1.cr.aliyuncs.com/agentscope/node:slim AS console-builder
 WORKDIR /app
+ARG NODE_OPTIONS="--max-old-space-size=4096"
+ENV NODE_OPTIONS=${NODE_OPTIONS}
 COPY console /app/console
 RUN cd /app/console && npm ci --include=dev && npm run build
 
@@ -85,6 +87,7 @@ ENV PATH="/app/venv/bin:$PATH"
 
 COPY pyproject.toml setup.py README.md ./
 COPY src ./src
+COPY examples/custom_channels/clawhub_chat ./bundled_custom_channels/clawhub_chat
 # Inject console dist from build stage (repo does not commit dist).
 COPY --from=console-builder /app/console/dist/ ./src/qwenpaw/console/
 # Speed up Python package installation with uv.
@@ -97,6 +100,7 @@ ENV QWENPAW_PORT=8088
 
 COPY deploy/config/supervisord.conf.template /etc/supervisor/conf.d/supervisord.conf.template
 COPY --chmod=755 deploy/entrypoint.sh /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh
 
 EXPOSE 8088
 

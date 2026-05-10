@@ -1,0 +1,64 @@
+{
+  "id": "cloud_edge",
+  "name": "Cloud Edge Channel",
+  "version": "0.1.0",
+  "description": "Edge-side channel for ClawHub. The edge QwenPaw registers, heartbeats, polls tasks, executes locally, and reports results through outbound HTTP.",
+  "type": "custom_channel",
+  "entry": "cloud_edge.CloudEdgeChannel",
+  "config_fields": [
+    {
+      "name": "enabled",
+      "type": "boolean",
+      "default": false,
+      "description": "Enable or disable this channel."
+    },
+    {
+      "name": "hub_url",
+      "type": "string",
+      "required": true,
+      "description": "ClawHub base URL, for example http://127.0.0.1:8080."
+    },
+    {
+      "name": "node_id",
+      "type": "string",
+      "required": true,
+      "description": "Unique edge node id."
+    },
+    {
+      "name": "tenant_id",
+      "type": "string",
+      "required": true,
+      "description": "Tenant identifier."
+    },
+    {
+      "name": "group_name",
+      "type": "string",
+      "required": true,
+      "description": "Node group name."
+    },
+    {
+      "name": "username",
+      "type": "string",
+      "required": false,
+      "description": "Operator or server username displayed in ClawHub."
+    },
+    {
+      "name": "token",
+      "type": "password",
+      "required": false,
+      "description": "Optional shared secret sent as X-Edge-Token."
+    },
+    {
+      "name": "heartbeat_interval",
+      "type": "number",
+      "default": 30,
+      "description": "Heartbeat interval in seconds."
+    },
+    {
+      "name": "poll_interval",
+      "type": "number",
+      "default": 2,
+      "description": "Task polling interval in seconds."
+    }
+  ]
+}

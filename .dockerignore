@@ -38,6 +38,8 @@ console/.vite
 node_modules
 **/node_modules
 **/dist
+!dist
+!dist/**
 !src/qwenpaw/console/dist
 !src/qwenpaw/console/dist/**
 **/.vite

@@ -1,0 +1,22 @@
+{
+  "id": "clawhub_chat",
+  "name": "ClawHub Chat Channel",
+  "version": "0.1.0",
+  "description": "Managed-instance channel for ClawHub. ClawHub forwards in-page chat messages to the QwenPaw container and streams runner events back.",
+  "type": "custom_channel",
+  "entry": "clawhub_chat.ClawHubChatChannel",
+  "config_fields": [
+    {
+      "name": "enabled",
+      "type": "boolean",
+      "default": false,
+      "description": "Enable the channel in the channel manager. The HTTP route is registered when the custom channel is installed."
+    },
+    {
+      "name": "token",
+      "type": "password",
+      "required": false,
+      "description": "Optional shared secret. When set, ClawHub must send it as X-ClawHub-Token."
+    }
+  ]
+}

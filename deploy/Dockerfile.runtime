@@ -1,0 +1,45 @@
+FROM agentscope-registry.ap-southeast-1.cr.aliyuncs.com/agentscope/node:slim
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --fix-missing \
+    curl \
+    python3 \
+    python3-pip \
+    python3-venv \
+    build-essential \
+    libssl-dev \
+    git \
+    supervisor \
+    vim \
+    gettext-base \
+    xfce4 \
+    xfce4-terminal \
+    xvfb \
+    dbus-x11 \
+    fonts-wqy-zenhei \
+    fonts-wqy-microhei \
+    chromium \
+    chromium-sandbox \
+    libx11-xcb1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxi6 \
+    libxtst6 \
+    libnss3 \
+    libglib2.0-0 \
+    libdrm2 \
+    libgbm1 \
+    libasound2 \
+    fonts-liberation \
+    libu2f-udev \
+  && rm -rf /var/lib/apt/lists/* \
+  && apt-get clean
+
+RUN sed -i 's/^CHROMIUM_FLAGS=""/CHROMIUM_FLAGS="--no-sandbox"/' /usr/bin/chromium
+
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV QWENPAW_RUNNING_IN_CONTAINER=1

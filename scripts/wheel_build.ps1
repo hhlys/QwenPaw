@@ -1,5 +1,10 @@
-# Build a full wheel package including the latest console frontend.
-# Run from repo root: pwsh -File scripts/wheel_build.ps1
+param(
+    [switch]$SkipConsole
+)
+
+# Build a wheel package. By default this refreshes the console frontend.
+# Use -SkipConsole when src/qwenpaw/console already contains current assets.
+# Run from repo root: PowerShell -File scripts/wheel_build.ps1
 
 $ErrorActionPreference = "Stop"
 $RepoRoot = (Get-Item $PSScriptRoot).Parent.FullName
@@ -8,25 +13,33 @@ Set-Location $RepoRoot
 $ConsoleDir = Join-Path $RepoRoot "console"
 $ConsoleDest = Join-Path $RepoRoot "src\qwenpaw\console"
 
-Write-Host "[wheel_build] Building console frontend..."
-Push-Location $ConsoleDir
-try {
-  npm ci
-  if ($LASTEXITCODE -ne 0) { throw "npm ci failed with exit code $LASTEXITCODE" }
-  npm run build
-  if ($LASTEXITCODE -ne 0) { throw "npm run build failed with exit code $LASTEXITCODE" }
-} finally {
-  Pop-Location
-}
-
-Write-Host "[wheel_build] Copying console/dist/* -> src/qwenpaw/console/..."
-if (Test-Path $ConsoleDest) {
-  Remove-Item -Path (Join-Path $ConsoleDest "*") -Recurse -Force -ErrorAction SilentlyContinue
+if ($SkipConsole) {
+  $ConsoleIndex = Join-Path $ConsoleDest "index.html"
+  if (!(Test-Path $ConsoleIndex)) {
+    throw "Cannot skip console build: missing $ConsoleIndex"
+  }
+  Write-Host "[wheel_build] Skipping console frontend build; using existing src/qwenpaw/console assets."
 } else {
-  New-Item -ItemType Directory -Force -Path $ConsoleDest | Out-Null
+  Write-Host "[wheel_build] Building console frontend..."
+  Push-Location $ConsoleDir
+  try {
+    npm ci
+    if ($LASTEXITCODE -ne 0) { throw "npm ci failed with exit code $LASTEXITCODE" }
+    npm run build
+    if ($LASTEXITCODE -ne 0) { throw "npm run build failed with exit code $LASTEXITCODE" }
+  } finally {
+    Pop-Location
+  }
+
+  Write-Host "[wheel_build] Copying console/dist/* -> src/qwenpaw/console/..."
+  if (Test-Path $ConsoleDest) {
+    Remove-Item -Path (Join-Path $ConsoleDest "*") -Recurse -Force -ErrorAction SilentlyContinue
+  } else {
+    New-Item -ItemType Directory -Force -Path $ConsoleDest | Out-Null
+  }
+  $ConsoleDist = Join-Path $ConsoleDir "dist"
+  Copy-Item -Path (Join-Path $ConsoleDist "*") -Destination $ConsoleDest -Recurse -Force
 }
-$ConsoleDist = Join-Path $ConsoleDir "dist"
-Copy-Item -Path (Join-Path $ConsoleDist "*") -Destination $ConsoleDest -Recurse -Force
 
 Write-Host "[wheel_build] Building wheel + sdist..."
 python -m pip install --quiet build

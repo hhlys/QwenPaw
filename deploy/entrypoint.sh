@@ -13,6 +13,15 @@ else
   echo "✓ Config found in ${QWENPAW_WORKING_DIR}, skipping initialization."
 fi
 
+# Install bundled managed-instance chat channel for ClawHub if not present.
+if [ -d "/app/bundled_custom_channels/clawhub_chat" ] \
+  && [ ! -d "${QWENPAW_WORKING_DIR}/custom_channels/clawhub_chat" ]; then
+  echo "Installing bundled clawhub_chat custom channel..."
+  mkdir -p "${QWENPAW_WORKING_DIR}/custom_channels"
+  cp -R /app/bundled_custom_channels/clawhub_chat \
+    "${QWENPAW_WORKING_DIR}/custom_channels/clawhub_chat"
+fi
+
 export QWENPAW_PORT="${QWENPAW_PORT:-8088}"
 envsubst '${QWENPAW_PORT}' \
   < /etc/supervisor/conf.d/supervisord.conf.template \

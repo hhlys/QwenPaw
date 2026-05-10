@@ -1,0 +1,42 @@
+ARG QWENPAW_RUNTIME_IMAGE=qwenpaw-runtime:local
+FROM ${QWENPAW_RUNTIME_IMAGE}
+
+ENV NODE_ENV=production
+ENV WORKSPACE_DIR=/app
+ENV QWENPAW_WORKING_DIR=/app/working
+ENV QWENPAW_SECRET_DIR=/app/working.secret
+ENV QWENPAW_BACKUP_DIR=/app/working.backups
+
+ARG QWENPAW_DISABLED_CHANNELS="imessage"
+ENV QWENPAW_DISABLED_CHANNELS=${QWENPAW_DISABLED_CHANNELS}
+ARG QWENPAW_ENABLED_CHANNELS=""
+ENV QWENPAW_ENABLED_CHANNELS=${QWENPAW_ENABLED_CHANNELS}
+
+WORKDIR ${WORKSPACE_DIR}
+
+RUN python3 -m venv venv
+ENV PATH="/app/venv/bin:$PATH"
+
+COPY build/runtime-requirements.txt /tmp/runtime-requirements.txt
+COPY --from=agentscope-registry.ap-southeast-1.cr.aliyuncs.com/agentscope/uv:latest /uv /bin/uv
+RUN uv pip install --no-cache-dir -r /tmp/runtime-requirements.txt \
+  && rm -f /tmp/runtime-requirements.txt
+
+COPY dist/ /tmp/dist/
+COPY examples/custom_channels/clawhub_chat ./bundled_custom_channels/clawhub_chat
+
+RUN set -eux; \
+    project_wheel="$(find /tmp/dist -maxdepth 1 -name 'qwenpaw-*.whl' | head -n 1)"; \
+    test -n "${project_wheel}"; \
+    uv pip install --no-cache-dir --no-deps "${project_wheel}"; \
+    rm -rf /tmp/dist
+
+ENV QWENPAW_PORT=8088
+
+COPY deploy/config/supervisord.conf.template /etc/supervisor/conf.d/supervisord.conf.template
+COPY --chmod=755 deploy/entrypoint.sh /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh
+
+EXPOSE 8088
+
+CMD ["/entrypoint.sh"]

@@ -83,6 +83,7 @@ Desktop.ini
 uv.lock
 venv/
 .venv/
+myvenv/
 providers.json
 
 # Logs
