@@ -1,0 +1,32 @@
+# Python environments
+venv/
+.venv/
+myvenv/
+.myvenv/
+
+# Python build/cache output
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+web/
+web/**
+
+# Logs and local config
+logs/
+*.log
+.env
+.env.*
+
+# Frontend dependencies/build cache
+node_modules/
+.vite/
+web/console/dist/
+web/console/node_modules/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
