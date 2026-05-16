@@ -2,23 +2,26 @@
 """Resolve the web console static assets directory (shared by app and CLI)."""
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from ..constant import EnvVarLoader
 
-# Primary env key (``COPAW_CONSOLE_STATIC_DIR`` is accepted as a legacy
-# fallback via :class:`~qwenpaw.constant.EnvVarLoader`).
+# Primary QwenPaw env key (``COPAW_CONSOLE_STATIC_DIR`` is accepted as a
+# legacy fallback via :class:`~qwenpaw.constant.EnvVarLoader`).
 CONSOLE_STATIC_ENV = "QWENPAW_CONSOLE_STATIC_DIR"
+
+
+def _get_console_static_override() -> str:
+    return EnvVarLoader.get_str(CONSOLE_STATIC_ENV)
 
 
 def resolve_console_static_dir() -> str:
     """Return the directory expected to contain ``index.html`` for the console.
 
-    Resolution order matches :mod:`qwenpaw.app._app`: env override, package
-    ``qwenpaw/console``, repo ``console/dist``, then cwd fallbacks.
+    Resolution order: QwenPaw env override, package ``qwenpaw/console``, repo
+    ``console/dist``, then cwd fallbacks.
     """
-    static_dir = EnvVarLoader.get_str("QWENPAW_CONSOLE_STATIC_DIR")
+    static_dir = _get_console_static_override()
     if static_dir:
         return static_dir
 

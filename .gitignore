@@ -19,6 +19,7 @@ cookbook/_build
 # production
 /build
 dist/
+dist-core/
 .wheelshim/
 # Console frontend build (generated in Docker/CI, do not commit)
 console/.cursor/
@@ -83,6 +84,8 @@ Desktop.ini
 uv.lock
 venv/
 .venv/
+myvenv/
+.myvenv/
 providers.json
 
 # Logs
