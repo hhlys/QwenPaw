@@ -1,0 +1,15 @@
+[Unit]
+Description=QwenPaw Offline Runtime
+After=network.target
+
+[Service]
+Type=forking
+WorkingDirectory=__APP_HOME__
+ExecStart=__APP_HOME__/start.sh
+ExecStop=__APP_HOME__/stop.sh
+PIDFile=__APP_HOME__/run/qwenpaw.pid
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
