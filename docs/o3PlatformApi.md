@@ -16,18 +16,308 @@ Clawhub 内部仍需维护必要映射：
 
 ## 第 1 章 会话管理类接口
 
-| 序号 | Clawhub 接口 URL | QwenPaw 接口 URL | 入参 | 出参 | 接口功能 |
-|---:|---|---|---|---|---|
-| 1 | `POST /api/o3/chats/{chat_id}/messages/stream` | `POST /api/console/chat` | **Path**: `chat_id`，Clawhub 对外 chat 会话 ID。**Body**: `message` string，用户输入文本；`attachments` array，可选附件列表，每项包含 `file_id`、`type`、`file_name`；`user_id` string，o3 用户 ID；`agent_id` string，可选目标 QwenPaw Agent；`stream` boolean，固定为 `true`。Clawhub 转发时组装 QwenPaw `input`、`session_id`、`user_id`、`channel=console`、`stream=true`。 | `text/event-stream`。每条事件格式为 `data: {...}`。事件内容为 QwenPaw runtime message 或 response payload；错误事件可能为 `{"error":"..."}`。 | 发起或继续一个 chat 会话，并流式返回模型回复。 |
-| 2 | `POST /api/o3/chats/{chat_id}/messages/reconnect` | `POST /api/console/chat` | **Path**: `chat_id`。**Body**: `user_id` string，o3 用户 ID；`agent_id` string，可选目标 QwenPaw Agent。Clawhub 转发时传 `reconnect=true`、对应 QwenPaw `session_id`、`user_id`、`channel=console`，不追加新的用户消息。 | `text/event-stream`。继续接收该 chat 当前运行中的 SSE 输出；如果没有运行中的流，可能返回空流或直接结束。 | 页面刷新、网络中断后重新连接正在生成中的 chat 流。 |
-| 3 | `POST /api/o3/chats/{chat_id}/stop` | `POST /api/console/chat/stop?chat_id={chat_id}` | **Path**: `chat_id`。Clawhub 内部优先映射为 QwenPaw `chat_id` 后转发；如没有映射，可尝试传 QwenPaw `session_id`，QwenPaw 会按 console channel 尝试反查。 | JSON: `stopped` boolean，是否成功停止运行中的生成任务。 | 停止当前 chat 的流式生成。 |
-| 4 | `POST /api/o3/files` | `POST /api/console/upload` | **Body**: `multipart/form-data`，`file` 必填。Clawhub 可额外接收 `chat_id`、`user_id`、`agent_id` 用于业务记录，但转发 QwenPaw 时核心字段只有 `file`。QwenPaw 当前限制文件大小约 10 MB。 | JSON: `file_id` string，Clawhub 生成的文件 ID；`file_name` string，安全文件名；`size` number，文件大小；`url` string，Clawhub 文件访问 URL。Clawhub 内部需保存 QwenPaw 返回的真实 `url` 文件路径。 | 上传 chat 附件。文件会话先上传文件，再在流式会话接口的 `attachments` 中引用 `file_id`。 |
-| 5 | `GET /api/o3/files/{file_id}/preview` | `GET /api/files/preview/{filepath}` | **Path**: `file_id`。Clawhub 内部将 `file_id` 映射为 QwenPaw 上传返回的真实 `filepath`。 | 文件流。文件不存在时返回 `404`。 | 预览或下载 chat 附件，用于 o3 UI 回显图片、音视频或文件。 |
-| 6 | `GET /api/o3/chats` | `GET /api/chats?user_id={user_id}&channel=console` | **Query**: `user_id` string，建议必传，用于用户隔离；`agent_id` string，可选目标 QwenPaw Agent；`limit`、`page` 可选，如 o3 UI 需要分页，由 Clawhub 自行分页或裁剪。Clawhub 转发 QwenPaw 时固定 `channel=console`。 | JSON array。建议 Clawhub 返回字段：`chat_id`、`name`、`user_id`、`status`、`created_at`、`updated_at`、`pinned`、`meta`。QwenPaw 原始 `ChatSpec.id` 即 QwenPaw `chat_id`。 | 查询 chat 会话列表，用于 o3 UI 左侧会话栏。 |
-| 7 | `GET /api/o3/chats/{chat_id}` | `GET /api/chats/{chat_id}` | **Path**: `chat_id`。Clawhub 内部映射为 QwenPaw `chat_id`。**Query**: `agent_id` 可选。 | JSON: `chat_id` string；`status` string；`messages` array。`messages[].role` 可能为 `user`、`assistant`、`system`、`tool`；`messages[].content[]` 可能包含 `text`、`image`、`audio`、`video`、`file`、`data` 等内容块。 | 获取 chat 详情和历史消息。 |
-| 8 | `PATCH /api/o3/chats/{chat_id}` | `PUT /api/chats/{chat_id}` | **Path**: `chat_id`。**Body**: `name` string，可选 chat 标题；`pinned` boolean，可选是否置顶。Clawhub 转发 QwenPaw 时只传 `{ "name": ..., "pinned": ... }`。 | JSON: 更新后的 chat 对象，建议包含 `chat_id`、`name`、`user_id`、`status`、`created_at`、`updated_at`、`pinned`、`meta`。 | 修改 chat 元数据，例如重命名或置顶。 |
-| 9 | `DELETE /api/o3/chats/{chat_id}` | `DELETE /api/chats/{chat_id}` | **Path**: `chat_id`。Clawhub 内部映射为 QwenPaw `chat_id`。 | JSON: `deleted` boolean。不存在时返回 `404`。 | 删除单个 chat。注意 QwenPaw 当前只删除 `ChatSpec` 元数据映射，不清理底层 session JSON 状态文件。 |
-| 10 | `POST /api/o3/chats/batch-delete` | `POST /api/chats/batch-delete` | **Body**: `chat_ids` string array，Clawhub 对外 chat ID 列表。Clawhub 内部映射为 QwenPaw `chat_id` 数组后转发；QwenPaw 接收原始 JSON 数组，例如 `["id1","id2"]`。 | JSON: `deleted` boolean，表示是否执行删除。 | 批量删除 chat。若 o3 UI 没有批量操作，可暂不暴露。 |
+<table>
+  <thead>
+    <tr>
+      <th>序号</th>
+      <th>Clawhub 接口 URL</th>
+      <th>QwenPaw 接口 URL</th>
+      <th>入参</th>
+      <th>出参</th>
+      <th>接口功能</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td><code>POST /api/o3/chats/{chat_id}/messages/stream</code></td>
+      <td><code>POST /api/console/chat</code></td>
+      <td><pre><code class="language-json">{
+  "path": {
+    "chat_id": "string, required"
+  },
+  "body": {
+    "user_id": "string, required",
+    "agent_id": "string, optional",
+    "message": "string, required",
+    "attachments": [
+      {
+        "file_id": "string, required",
+        "type": "file | image | audio | video",
+        "file_name": "string, optional"
+      }
+    ],
+    "stream": true
+  },
+  "qwenpaw_forward": {
+    "session_id": "string, mapped from chat_id",
+    "user_id": "string",
+    "channel": "console",
+    "stream": true,
+    "input": [
+      {
+        "role": "user",
+        "type": "message",
+        "content": [
+          {
+            "type": "text",
+            "text": "string"
+          }
+        ]
+      }
+    ]
+  }
+}</code></pre></td>
+      <td><pre><code class="language-json">{
+  "content_type": "text/event-stream",
+  "event_format": "data: {...}",
+  "data": {
+    "object": "response | message",
+    "status": "created | in_progress | completed | incomplete",
+    "output": [
+      {
+        "role": "assistant",
+        "type": "message",
+        "content": [
+          {
+            "type": "text",
+            "text": "string"
+          }
+        ]
+      }
+    ],
+    "error": "string, optional"
+  }
+}</code></pre></td>
+      <td>发起或继续一个 chat 会话，并流式返回模型回复。</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td><code>POST /api/o3/chats/{chat_id}/messages/reconnect</code></td>
+      <td><code>POST /api/console/chat</code></td>
+      <td><pre><code class="language-json">{
+  "path": {
+    "chat_id": "string, required"
+  },
+  "body": {
+    "user_id": "string, required",
+    "agent_id": "string, optional"
+  },
+  "qwenpaw_forward": {
+    "session_id": "string, mapped from chat_id",
+    "user_id": "string",
+    "channel": "console",
+    "stream": true,
+    "reconnect": true
+  }
+}</code></pre></td>
+      <td><pre><code class="language-json">{
+  "content_type": "text/event-stream",
+  "event_format": "data: {...}",
+  "data": {
+    "object": "response | message",
+    "status": "in_progress | completed",
+    "output": [],
+    "error": "string, optional"
+  }
+}</code></pre></td>
+      <td>页面刷新、网络中断后重新连接正在生成中的 chat 流。</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td><code>POST /api/o3/chats/{chat_id}/stop</code></td>
+      <td><code>POST /api/console/chat/stop?chat_id={chat_id}</code></td>
+      <td><pre><code class="language-json">{
+  "path": {
+    "chat_id": "string, required"
+  },
+  "qwenpaw_forward": {
+    "chat_id": "string, mapped QwenPaw chat_id or session_id"
+  }
+}</code></pre></td>
+      <td><pre><code class="language-json">{
+  "stopped": "boolean"
+}</code></pre></td>
+      <td>停止当前 chat 的流式生成。</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td><code>POST /api/o3/files</code></td>
+      <td><code>POST /api/console/upload</code></td>
+      <td><pre><code class="language-json">{
+  "content_type": "multipart/form-data",
+  "form": {
+    "file": "binary, required",
+    "chat_id": "string, optional",
+    "user_id": "string, optional",
+    "agent_id": "string, optional"
+  }
+}</code></pre></td>
+      <td><pre><code class="language-json">{
+  "file_id": "string",
+  "file_name": "string",
+  "size": "number",
+  "url": "string",
+  "qwenpaw_url": "string, internal only"
+}</code></pre></td>
+      <td>上传 chat 附件。文件会话先上传文件，再在流式会话接口的 <code>attachments</code> 中引用 <code>file_id</code>。</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td><code>GET /api/o3/files/{file_id}/preview</code></td>
+      <td><code>GET /api/files/preview/{filepath}</code></td>
+      <td><pre><code class="language-json">{
+  "path": {
+    "file_id": "string, required"
+  },
+  "qwenpaw_forward": {
+    "filepath": "string, mapped from file_id"
+  }
+}</code></pre></td>
+      <td><pre><code class="language-json">{
+  "content_type": "application/octet-stream | image/* | audio/* | video/*",
+  "body": "binary file stream",
+  "error": {
+    "status": 404,
+    "detail": "Not found"
+  }
+}</code></pre></td>
+      <td>预览或下载 chat 附件，用于 o3 UI 回显图片、音视频或文件。</td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td><code>GET /api/o3/chats</code></td>
+      <td><code>GET /api/chats?user_id={user_id}&amp;channel=console</code></td>
+      <td><pre><code class="language-json">{
+  "query": {
+    "user_id": "string, recommended",
+    "agent_id": "string, optional",
+    "limit": "number, optional",
+    "page": "number, optional"
+  },
+  "qwenpaw_forward": {
+    "user_id": "string, optional",
+    "channel": "console"
+  }
+}</code></pre></td>
+      <td><pre><code class="language-json">[
+  {
+    "chat_id": "string",
+    "name": "string",
+    "user_id": "string",
+    "status": "idle | running",
+    "created_at": "string, ISO-8601",
+    "updated_at": "string, ISO-8601",
+    "pinned": "boolean",
+    "meta": {}
+  }
+]</code></pre></td>
+      <td>查询 chat 会话列表，用于 o3 UI 左侧会话栏。</td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td><code>GET /api/o3/chats/{chat_id}</code></td>
+      <td><code>GET /api/chats/{chat_id}</code></td>
+      <td><pre><code class="language-json">{
+  "path": {
+    "chat_id": "string, required"
+  },
+  "query": {
+    "agent_id": "string, optional"
+  },
+  "qwenpaw_forward": {
+    "chat_id": "string, mapped QwenPaw chat_id"
+  }
+}</code></pre></td>
+      <td><pre><code class="language-json">{
+  "chat_id": "string",
+  "status": "idle | running",
+  "messages": [
+    {
+      "role": "user | assistant | system | tool",
+      "type": "message | reasoning | plugin_call | plugin_call_output",
+      "content": [
+        {
+          "type": "text | image | audio | video | file | data",
+          "text": "string, optional",
+          "image_url": "string, optional",
+          "file_url": "string, optional",
+          "data": "object | string, optional"
+        }
+      ],
+      "metadata": {}
+    }
+  ]
+}</code></pre></td>
+      <td>获取 chat 详情和历史消息。</td>
+    </tr>
+    <tr>
+      <td>8</td>
+      <td><code>PATCH /api/o3/chats/{chat_id}</code></td>
+      <td><code>PUT /api/chats/{chat_id}</code></td>
+      <td><pre><code class="language-json">{
+  "path": {
+    "chat_id": "string, required"
+  },
+  "body": {
+    "name": "string, optional",
+    "pinned": "boolean, optional"
+  },
+  "qwenpaw_forward": {
+    "name": "string, optional",
+    "pinned": "boolean, optional"
+  }
+}</code></pre></td>
+      <td><pre><code class="language-json">{
+  "chat_id": "string",
+  "name": "string",
+  "user_id": "string",
+  "status": "idle | running",
+  "created_at": "string, ISO-8601",
+  "updated_at": "string, ISO-8601",
+  "pinned": "boolean",
+  "meta": {}
+}</code></pre></td>
+      <td>修改 chat 元数据，例如重命名或置顶。</td>
+    </tr>
+    <tr>
+      <td>9</td>
+      <td><code>DELETE /api/o3/chats/{chat_id}</code></td>
+      <td><code>DELETE /api/chats/{chat_id}</code></td>
+      <td><pre><code class="language-json">{
+  "path": {
+    "chat_id": "string, required"
+  },
+  "qwenpaw_forward": {
+    "chat_id": "string, mapped QwenPaw chat_id"
+  }
+}</code></pre></td>
+      <td><pre><code class="language-json">{
+  "deleted": "boolean"
+}</code></pre></td>
+      <td>删除单个 chat。注意 QwenPaw 当前只删除 <code>ChatSpec</code> 元数据映射，不清理底层 session JSON 状态文件。</td>
+    </tr>
+    <tr>
+      <td>10</td>
+      <td><code>POST /api/o3/chats/batch-delete</code></td>
+      <td><code>POST /api/chats/batch-delete</code></td>
+      <td><pre><code class="language-json">{
+  "body": {
+    "chat_ids": [
+      "string"
+    ]
+  },
+  "qwenpaw_forward": [
+    "mapped_qwenpaw_chat_id"
+  ]
+}</code></pre></td>
+      <td><pre><code class="language-json">{
+  "deleted": "boolean"
+}</code></pre></td>
+      <td>批量删除 chat。若 o3 UI 没有批量操作，可暂不暴露。</td>
+    </tr>
+  </tbody>
+</table>
 
 ## 第 2 章 模型管理类接口
 
@@ -37,15 +327,331 @@ QwenPaw 的模型配置核心入口是 `/api/models` 和 `/api/models/active`。
 - `scope=agent`：配置或查询指定 Agent 的模型，需要 `agent_id`。
 - `scope=effective`：查询当前实际生效模型，优先返回 Agent 模型，没有则回退全局默认模型。
 
-| 序号 | Clawhub 接口 URL | QwenPaw 接口 URL | 入参 | 出参 | 接口功能 |
-|---:|---|---|---|---|---|
-| 11 | `GET /api/o3/models` | `GET /api/models` | **Query**: `agent_id` 可选，仅用于 Clawhub 做权限或上下文判断；QwenPaw 原接口不需要该参数。 | JSON array。每项为 provider 信息：`id` provider ID；`name` provider 名称；`base_url`；`api_key_prefix`；`chat_model`；`models` 内置或可用模型数组；`extra_models` 用户额外添加模型数组；`is_custom` 是否自定义 provider；`supports_discover` 是否支持模型发现；`requires_api_key` 是否需要 API key。模型项通常包含 `id`、`name`、`is_free`、`supports_multimodal`、`supports_image`、`supports_video`、`probe_source`。 | 查询当前可用 provider 和模型列表，用于 o3 UI 展示模型选择器。 |
-| 12 | `GET /api/o3/models/default` | `GET /api/models/active?scope=global` | 无必填参数。**Query**: `agent_id` 可选，仅用于 Clawhub 做权限判断，不转发给 QwenPaw。 | JSON: `active_llm`。已配置时为 `{ "provider_id": "openai", "model": "gpt-4.1" }`；未配置时可能为 `null`。 | 查询全局默认模型。默认模型是所有未单独配置 Agent 模型时的兜底模型。 |
-| 13 | `PUT /api/o3/models/default` | `PUT /api/models/active` | **Body**: `provider_id` string，目标 provider；`model` string，目标模型 ID。Clawhub 转发 QwenPaw 时补齐 `scope="global"`，无需 `agent_id`。 | JSON: `active_llm`，结构为 `{ "provider_id": "...", "model": "..." }`。provider 不存在可能返回 `404`；model 不存在或不可用可能返回 `400`。 | 配置全局默认模型。等价于调用 QwenPaw 激活模型接口并使用 `scope=global`。 |
-| 14 | `GET /api/o3/models/active` | `GET /api/models/active?scope=effective&agent_id={agent_id}` | **Query**: `agent_id` 可选目标 QwenPaw Agent；`scope` 可选，建议默认 `effective`。可选值：`effective`、`global`、`agent`。当 `scope=agent` 时必须传 `agent_id`。 | JSON: `active_llm`。已配置时为 `{ "provider_id": "...", "model": "..." }`；未配置时可能为 `null`。 | 查询当前实际生效模型。o3 UI 展示“当前使用模型”时建议使用此接口。 |
-| 15 | `PUT /api/o3/models/active` | `PUT /api/models/active` | **Body**: `provider_id` string；`model` string；`scope` string，`global` 或 `agent`；`agent_id` string，当 `scope=agent` 时必填。建议 o3 给指定 Agent 切换模型时使用 `scope=agent`，避免误改全局默认模型。 | JSON: `active_llm`，结构为 `{ "provider_id": "...", "model": "..." }`。provider 不存在可能返回 `404`；model 不存在或不可用可能返回 `400`；保存 Agent 配置失败可能返回 `500`。 | 激活模型。`scope=global` 时表示设置默认模型；`scope=agent` 时表示设置指定 Agent 的激活模型。 |
-| 16 | `POST /api/o3/models/custom-providers` | `POST /api/models/custom-providers`；必要时 Clawhub 可继续调用 `PUT /api/models/{provider_id}/config` | **Body**: `id` string，自定义 provider ID；`name` string，展示名称；`default_base_url` string，模型服务地址；`api_key` string，可选，若提供则由 Clawhub 额外转发配置接口；`api_key_prefix` string，可选；`chat_model` string，可选，`OpenAIChatModel`、`AnthropicChatModel`、`GeminiChatModel`，默认建议 `OpenAIChatModel`；`models` array，可选初始模型列表，每项包含 `id`、`name`、`is_free`、`supports_multimodal`、`supports_image`、`supports_video`、`probe_source`。 | JSON: provider 信息，包含 `id`、`name`、`base_url`、`chat_model`、`models`、`extra_models`、`is_custom` 等。provider ID 冲突或字段非法时返回 `400`。 | 添加自定义模型供应商。适合 o3 接入 OpenAI-compatible、Anthropic-compatible 或 Gemini-compatible 私有模型服务。 |
-| 17 | `POST /api/o3/models/{provider_id}/models` | `POST /api/models/{provider_id}/models` | **Path**: `provider_id`。**Body**: `id` string，模型 ID；`name` string，展示名；`is_free` boolean，可选；`supports_multimodal` boolean/null，可选；`supports_image` boolean/null，可选；`supports_video` boolean/null，可选；`probe_source` string/null，可选。 | JSON: 更新后的 provider 信息，包含该 provider 下最新 `models` / `extra_models`。provider 不存在返回 `404`。 | 给已有 provider 添加模型 ID。适合 provider 已存在，只需要补充一个自定义模型。 |
+<table>
+  <thead>
+    <tr>
+      <th>序号</th>
+      <th>Clawhub 接口 URL</th>
+      <th>QwenPaw 接口 URL</th>
+      <th>入参</th>
+      <th>出参</th>
+      <th>接口功能</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>11</td>
+      <td><code>GET /api/o3/models</code></td>
+      <td><code>GET /api/models</code></td>
+      <td>
+
+```json
+{
+  "query": {
+    "agent_id": "string, optional, 仅用于 Clawhub 做权限或上下文判断"
+  }
+}
+```
+
+      </td>
+      <td>
+
+```json
+[
+  {
+    "id": "string",
+    "name": "string",
+    "base_url": "string",
+    "api_key_prefix": "string",
+    "chat_model": "OpenAIChatModel | AnthropicChatModel | GeminiChatModel",
+    "models": [
+      {
+        "id": "string",
+        "name": "string",
+        "is_free": "boolean",
+        "supports_multimodal": "boolean | null",
+        "supports_image": "boolean | null",
+        "supports_video": "boolean | null",
+        "probe_source": "string | null"
+      }
+    ],
+    "extra_models": [
+      {
+        "id": "string",
+        "name": "string"
+      }
+    ],
+    "is_custom": "boolean",
+    "supports_discover": "boolean",
+    "requires_api_key": "boolean"
+  }
+]
+```
+
+      </td>
+      <td>查询当前可用 provider 和模型列表，用于 o3 UI 展示模型选择器。</td>
+    </tr>
+    <tr>
+      <td>12</td>
+      <td><code>GET /api/o3/models/default</code></td>
+      <td><code>GET /api/models/active?scope=global</code></td>
+      <td>
+
+```json
+{
+  "query": {
+    "agent_id": "string, optional, 仅用于 Clawhub 做权限判断，不转发给 QwenPaw"
+  },
+  "qwenpaw_forward": {
+    "scope": "global"
+  }
+}
+```
+
+      </td>
+      <td>
+
+```json
+{
+  "active_llm": {
+    "provider_id": "string",
+    "model": "string"
+  },
+  "nullable_fields": {
+    "active_llm": true
+  }
+}
+```
+
+      </td>
+      <td>查询全局默认模型。默认模型是所有未单独配置 Agent 模型时的兜底模型。</td>
+    </tr>
+    <tr>
+      <td>13</td>
+      <td><code>PUT /api/o3/models/default</code></td>
+      <td><code>PUT /api/models/active</code></td>
+      <td>
+
+```json
+{
+  "body": {
+    "provider_id": "string, required, 目标 provider",
+    "model": "string, required, 目标模型 ID"
+  },
+  "qwenpaw_forward": {
+    "provider_id": "string",
+    "model": "string",
+    "scope": "global"
+  }
+}
+```
+
+      </td>
+      <td>
+
+```json
+{
+  "active_llm": {
+    "provider_id": "string",
+    "model": "string"
+  },
+  "errors": {
+    "404": "provider not found",
+    "400": "model not found or invalid"
+  }
+}
+```
+
+      </td>
+      <td>配置全局默认模型。等价于调用 QwenPaw 激活模型接口并使用 <code>scope=global</code>。</td>
+    </tr>
+    <tr>
+      <td>14</td>
+      <td><code>GET /api/o3/models/active</code></td>
+      <td><code>GET /api/models/active?scope=effective&amp;agent_id={agent_id}</code></td>
+      <td>
+
+```json
+{
+  "query": {
+    "agent_id": "string, optional, 目标 QwenPaw Agent",
+    "scope": "effective | global | agent, optional, default effective"
+  },
+  "rules": {
+    "scope_agent_requires_agent_id": true
+  }
+}
+```
+
+      </td>
+      <td>
+
+```json
+{
+  "active_llm": {
+    "provider_id": "string",
+    "model": "string"
+  },
+  "nullable_fields": {
+    "active_llm": true
+  }
+}
+```
+
+      </td>
+      <td>查询当前实际生效模型。o3 UI 展示“当前使用模型”时建议使用此接口。</td>
+    </tr>
+    <tr>
+      <td>15</td>
+      <td><code>PUT /api/o3/models/active</code></td>
+      <td><code>PUT /api/models/active</code></td>
+      <td>
+
+```json
+{
+  "body": {
+    "provider_id": "string, required",
+    "model": "string, required",
+    "scope": "global | agent, required",
+    "agent_id": "string, required when scope is agent"
+  }
+}
+```
+
+      </td>
+      <td>
+
+```json
+{
+  "active_llm": {
+    "provider_id": "string",
+    "model": "string"
+  },
+  "errors": {
+    "404": "provider not found",
+    "400": "model not found or invalid",
+    "500": "failed to save agent config"
+  }
+}
+```
+
+      </td>
+      <td>激活模型。<code>scope=global</code> 时表示设置默认模型；<code>scope=agent</code> 时表示设置指定 Agent 的激活模型。</td>
+    </tr>
+    <tr>
+      <td>16</td>
+      <td><code>POST /api/o3/models/custom-providers</code></td>
+      <td><code>POST /api/models/custom-providers</code>；必要时 Clawhub 可继续调用 <code>PUT /api/models/{provider_id}/config</code></td>
+      <td>
+
+```json
+{
+  "body": {
+    "id": "string, required, 自定义 provider ID",
+    "name": "string, required, 展示名称",
+    "default_base_url": "string, optional, 模型服务地址",
+    "api_key": "string, optional, 若提供则由 Clawhub 额外转发配置接口",
+    "api_key_prefix": "string, optional",
+    "chat_model": "OpenAIChatModel | AnthropicChatModel | GeminiChatModel, optional, default OpenAIChatModel",
+    "models": [
+      {
+        "id": "string, required",
+        "name": "string, required",
+        "is_free": "boolean, optional",
+        "supports_multimodal": "boolean | null, optional",
+        "supports_image": "boolean | null, optional",
+        "supports_video": "boolean | null, optional",
+        "probe_source": "string | null, optional"
+      }
+    ]
+  },
+  "qwenpaw_forward": {
+    "create_provider": "POST /api/models/custom-providers",
+    "configure_provider_when_api_key_present": "PUT /api/models/{provider_id}/config"
+  }
+}
+```
+
+      </td>
+      <td>
+
+```json
+{
+  "id": "string",
+  "name": "string",
+  "base_url": "string",
+  "api_key_prefix": "string",
+  "chat_model": "string",
+  "models": [
+    {
+      "id": "string",
+      "name": "string"
+    }
+  ],
+  "extra_models": [],
+  "is_custom": true,
+  "errors": {
+    "400": "provider id duplicated or invalid fields"
+  }
+}
+```
+
+      </td>
+      <td>添加自定义模型供应商。适合 o3 接入 OpenAI-compatible、Anthropic-compatible 或 Gemini-compatible 私有模型服务。</td>
+    </tr>
+    <tr>
+      <td>17</td>
+      <td><code>POST /api/o3/models/{provider_id}/models</code></td>
+      <td><code>POST /api/models/{provider_id}/models</code></td>
+      <td>
+
+```json
+{
+  "path": {
+    "provider_id": "string, required"
+  },
+  "body": {
+    "id": "string, required, 模型 ID",
+    "name": "string, required, 展示名",
+    "is_free": "boolean, optional",
+    "supports_multimodal": "boolean | null, optional",
+    "supports_image": "boolean | null, optional",
+    "supports_video": "boolean | null, optional",
+    "probe_source": "string | null, optional"
+  }
+}
+```
+
+      </td>
+      <td>
+
+```json
+{
+  "id": "string",
+  "name": "string",
+  "models": [
+    {
+      "id": "string",
+      "name": "string"
+    }
+  ],
+  "extra_models": [
+    {
+      "id": "string",
+      "name": "string"
+    }
+  ],
+  "errors": {
+    "404": "provider not found"
+  }
+}
+```
+
+      </td>
+      <td>给已有 provider 添加模型 ID。适合 provider 已存在，只需要补充一个自定义模型。</td>
+    </tr>
+  </tbody>
+</table>
 
 ## 流式会话请求示例
 
